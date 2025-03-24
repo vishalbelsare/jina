@@ -12,10 +12,9 @@ for f in inspect.getmembers(Document):
         and not f[1].__name__.startswith('_')
         and not f[0].startswith('_')
     ):
-        if (
-            'return' in inspect.getfullargspec(f[1]).annotations
-            and str(inspect.getfullargspec(f[1]).annotations['return']) == '~T'
-        ):
+        if 'return' in inspect.getfullargspec(f[1]).annotations and str(
+            inspect.getfullargspec(f[1]).annotations['return']
+        ) in ('~T', 'T'):
             module_name = f[1].__qualname__.split('.')[0].replace('Mixin', '')
             desc = inspect.getdoc(
                 vars(sys.modules[f[1].__module__])[f[1].__qualname__.split('.')[0]]
@@ -43,7 +42,7 @@ for k, v in all_meth.items():
 doc_md = '../docs/fundamentals/document/fluent-interface.md'
 text = '\n'.join(all_s)
 
-with open(doc_md) as fp:
+with open(doc_md, encoding='utf-8') as fp:
     _old = fp.read()
     _new = re.sub(
         r'(<!-- fluent-interface-start -->\s*?\n).*(\n\s*?<!-- fluent-interface-end -->)',
@@ -52,5 +51,5 @@ with open(doc_md) as fp:
         flags=re.DOTALL,
     )
 
-with open(doc_md, 'w') as fp:
+with open(doc_md, 'w', encoding='utf-8') as fp:
     fp.write(_new)

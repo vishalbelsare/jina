@@ -1,10 +1,10 @@
-import os
 import glob
-from datetime import datetime
+import os
 
 import pytest
 
-from jina import __uptime__, Flow, Document, __windows__
+from jina import Document, Flow
+from jina.constants import __uptime__, __windows__
 from jina.enums import LogVerbosity
 from jina.helper import colored
 from jina.logging.logger import JinaLogger
@@ -41,9 +41,18 @@ def test_logging_syslog():
 
 
 def test_logging_default():
+    import logging
+    import sys
+
     with JinaLogger('test_logger') as logger:
         log(logger)
         assert len(logger.handlers) == 1
+
+    # test whether suppress root handlers
+    logging.root.handlers.append(logging.StreamHandler(sys.stdout))
+    with JinaLogger('test_logger', suppress_root_logging=False) as logger:
+        log(logger)
+        assert len(logging.root.handlers) > 0
 
 
 def test_logging_level_yaml(monkeypatch):
@@ -69,35 +78,10 @@ def test_logging_file(monkeypatch):
     ) as file_logger:
         log(file_logger)
         assert os.path.exists(fn)
-        with open(fn) as fp:
+        with open(fn, encoding='utf-8') as fp:
             assert len(fp.readlines()) == 5
     for f in glob.glob(cur_dir + '/*.log'):
         os.remove(f)
-
-
-@pytest.mark.parametrize('log_config', [os.path.join(cur_dir, 'yaml/fluent.yml'), None])
-def test_logging_fluentd(monkeypatch, log_config):
-    from fluent import asynchandler as fluentasynchandler
-
-    with JinaLogger(
-        'test_logger',
-        log_config=log_config,
-        identity='test_log_id',
-        workspace_path='/tmp/test/',
-    ) as logger:
-
-        def mock_emit(obj, record):
-            msg = obj.format(record)
-            assert msg['workspace_path'] == '/tmp/test/'
-            assert msg['log_id'] == 'test_log_id'
-            assert msg['context'] == 'test_logger'
-            assert msg['name'] == 'test_logger'
-            assert msg['type'] == 'INFO'
-            assert msg['message'] == 'logging progress'
-            datetime.fromisoformat(msg['uptime'])
-
-        monkeypatch.setattr(fluentasynchandler.FluentHandler, 'emit', mock_emit)
-        logger.info('logging progress')
 
 
 @pytest.mark.slow
@@ -105,18 +89,6 @@ def test_logging_quiet(caplog):
     # no way to capture logs in multiprocessing
     # see discussion here: https://github.com/pytest-dev/pytest/issues/3037#issuecomment-745050393
 
-    f = Flow().add().add()
-    with f:
-        f.index(Document())
-
     f = Flow().add(quiet=True).add()
-    with f:
-        f.index(Document())
-
-    f = Flow().add(quiet=True).add(quiet=True)
-    with f:
-        f.index(Document())
-
-    f = Flow(quiet=True).add().add()
     with f:
         f.index(Document())

@@ -1,10 +1,11 @@
+import importlib
 import os
 import sys
 import warnings
 from types import SimpleNamespace
 from typing import Optional
 
-from . import __resources_path__
+from jina.constants import __resources_path__
 
 IMPORTED = SimpleNamespace()
 IMPORTED.executors = False
@@ -39,60 +40,80 @@ class ImportExtensions:
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, traceback):
-        if exc_type == ModuleNotFoundError:
-            missing_module = self._pkg_name or exc_val.name
-            with open(os.path.join(__resources_path__, 'extra-requirements.txt')) as fp:
-                for v in fp:
-                    if (
-                        v.strip()
-                        and not v.startswith('#')
-                        and v.startswith(missing_module)
-                        and ':' in v
-                    ):
-                        missing_module, install_tags = v.split(':')
-                        self._tags.append(missing_module)
-                        self._tags.extend(vv.strip() for vv in install_tags.split(','))
-                        break
+    def _check_v(self, v, missing_module):
+        if (
+            v.strip()
+            and not v.startswith('#')
+            and v.startswith(missing_module)
+            and ':' in v
+        ):
+            return True
 
-            if self._tags:
-                from .helper import colored
+    def _find_missing_module_in_extra_req(self, missing_module):
+        with open(
+            os.path.join(__resources_path__, 'extra-requirements.txt'), encoding='utf-8'
+        ) as fp:
+            for v in fp:
+                if self._check_v(v, missing_module):
+                    missing_module, install_tags = v.split(':')
+                    self._tags.append(missing_module)
+                    self._tags.extend(vv.strip() for vv in install_tags.split(','))
+                    break
 
-                req_msg = colored('fallback to default behavior', color='yellow')
-                if self._required:
-                    req_msg = colored('and it is required', color='red')
-                err_msg = f'''Python package "{colored(missing_module, attrs='bold')}" is not installed, {req_msg}.
-                    You are trying to use a feature not enabled by your current Jina installation.'''
+    def _find_missing_module(self, exc_val):
+        missing_module = self._pkg_name or exc_val.name
+        missing_module = self._find_missing_module_in_extra_req(missing_module)
+        return missing_module
 
-                avail_tags = ' '.join(
-                    colored(f'[{tag}]', attrs='bold') for tag in self._tags
-                )
-                err_msg += (
-                    f'\n\nTo enable this feature, use {colored("pip install jina[TAG]", attrs="bold")}, '
-                    f'where {colored("[TAG]", attrs="bold")} is one of {avail_tags}.\n'
-                )
+    def _err_msg(self, exc_val, missing_module):
+        if self._tags:
+            from jina.helper import colored
 
-            else:
-                err_msg = f'{exc_val.msg}'
-
+            req_msg = colored('fallback to default behavior', color='yellow')
             if self._required:
-                if self._verbose:
-                    if self._logger:
-                        self._logger.critical(err_msg)
-                        if self._help_text:
-                            self._logger.error(self._help_text)
-                    else:
-                        warnings.warn(err_msg, RuntimeWarning, stacklevel=2)
-                raise exc_val
-            else:
-                if self._verbose:
-                    if self._logger:
-                        self._logger.warning(err_msg)
-                        if self._help_text:
-                            self._logger.info(self._help_text)
-                    else:
-                        warnings.warn(err_msg, RuntimeWarning, stacklevel=2)
-                return True  # suppress the error
+                req_msg = colored('and it is required', color='red')
+            err_msg = f'''Python package "{colored(missing_module, attrs='bold')}" is not installed, {req_msg}.
+            You are trying to use a feature not enabled by your current Jina installation.'''
+
+            avail_tags = ' '.join(
+                colored(f'[{tag}]', attrs='bold') for tag in self._tags
+            )
+            err_msg += (
+                f'\n\nTo enable this feature, use {colored("pip install jina[TAG]", attrs="bold")}, '
+                f'where {colored("[TAG]", attrs="bold")} is one of {avail_tags}.\n'
+            )
+        else:
+            err_msg = f'{exc_val.msg}'
+        return err_msg
+
+    def _log_critical(self, err_msg):
+        if self._verbose and self._logger:
+            self._logger.critical(err_msg)
+            if self._help_text:
+                self._logger.error(self._help_text)
+
+    def _log_warning(self, err_msg):
+        if self._verbose and self._logger:
+            self._logger.warning(err_msg)
+            if self._help_text:
+                self._logger.info(self._help_text)
+
+    def _raise_or_supress(self, err_msg, exc_val):
+        if self._verbose and not self._logger:
+            warnings.warn(err_msg, RuntimeWarning, stacklevel=2)
+        if self._required:
+            self._log_critical(err_msg)
+            raise exc_val
+        else:
+            self._log_warning(err_msg)
+            return True  # suppress the error
+
+    def __exit__(self, exc_type, exc_val, traceback):
+        if exc_type != ModuleNotFoundError:
+            return
+        missing_module = self._find_missing_module(exc_val)
+        err_msg = self._err_msg(exc_val, missing_module)
+        return self._raise_or_supress(err_msg, exc_val)
 
 
 def _path_import(absolute_path: str):
@@ -139,14 +160,22 @@ class PathImporter:
 
         :param paths: Paths of the modules.
         """
-        from .jaml.helper import complete_path
 
-        paths = [complete_path(m) for m in paths]
+        # assume paths are Python module names
+        not_python_module_paths = []
+        for path in paths:
+            if not os.path.isfile(path):
+                try:
+                    importlib.import_module(path)
+                except ModuleNotFoundError:
+                    not_python_module_paths.append(path)
+                except:
+                    raise
+            else:
+                not_python_module_paths.append(path)
 
-        for p in paths:
-            if not os.path.exists(p):
-                raise FileNotFoundError(
-                    f'cannot import module from {p}, file not exist'
-                )
+        # try again, but assume they are file paths instead of module names
+        from jina.jaml.helper import complete_path
 
-            _path_import(p)
+        for m in not_python_module_paths:
+            _path_import(complete_path(m))

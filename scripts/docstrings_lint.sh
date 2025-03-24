@@ -14,9 +14,9 @@ for changed_file in $CHANGED_FILES; do
     .github/* | \
     scripts/* | \
     jina/helloworld/* | \
-    jina/proto/jina_pb2.py | \
-    jina/proto/jina_pb2_grpc.py | \
+    jina/proto/* | \
     jina/resources/* | \
+    jina/serve/consensus/add_voter/* | \
     docs/* | \
     setup.py | \
     fastentrypoints.py)

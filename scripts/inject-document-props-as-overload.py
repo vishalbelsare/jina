@@ -56,7 +56,7 @@ def get_overload_signature(
         ]
     )
 
-    signature = f'def __init__(\n{indent}{indent}self,*,\n{args_str}\n{indent}):'
+    signature = f'def __init__(\n{indent}{indent}self,\n{args_str}\n{indent}):'
     final_str = f'@overload\n{indent}{signature}\n{indent}{indent}"""\n{doc_str}\n{indent}{indent}"""'
 
     return final_str
@@ -76,7 +76,7 @@ def write_signature(
         0,
         re.DOTALL,
     )
-    with open(filepath, 'w') as fp:
+    with open(filepath, 'w', encoding='utf-8') as fp:
         fp.write(final_code)
 
 

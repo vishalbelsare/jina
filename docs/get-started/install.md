@@ -1,7 +1,8 @@
 (install)=
-# Install
+# {octicon}`desktop-download` Install
 
-Standard install enables the full features of Jina. 
+Jina-serve comes with multiple installation options, enabling different feature sets.
+Standard install enables all major features of Jina-serve and is the recommended installation for most users.
 
 ````{tab} via PyPI
 ```shell
@@ -25,9 +26,9 @@ Version identifiers [are explained here](https://github.com/jina-ai/jina/blob/ma
 
 ### Minimum
 
-Minimum install enables basic features of Jina, but without support for HTTP, WebSocket, Docker and Hub.
+Minimum install enables basic features of Jina-serve, but without support for HTTP, WebSocket, Docker and Hub.
 
-Minimum install is often used when building and depolying an Executor.
+Minimum install is often used when building and deploying an Executor.
 
 
 ````{tab} via PyPI
@@ -86,16 +87,9 @@ docker run jinaai/jina:latest-perf
 ````
 
 
-### With Daemon (JinaD)
-
-Same as minimum install, but also install `uvloop` and `lz4`.
-
-```shell
-pip install "jina[daemon]"
-```
-
-
 ### Full development dependencies
+
+This installs additional dependencies, useful for developing Jina-serve itself. This includes Pytest, CI components etc.
 
 
 ````{tab} via PyPI
@@ -118,7 +112,7 @@ docker run jinaai/jina:latest-devel
 
 ### Prerelease
 
-Prerelease is the version always synced with the `master` branch of Jina's GitHub repository.
+Prerelease is the version always synced with the `master` branch of Jina-serve's GitHub repository.
 
 ````{tab} via PyPI
 
@@ -148,16 +142,16 @@ After installing Jina via `pip`, you should be able to use your shell's autocomp
 
 jina 
 
---help          --version       --version-full  check           client          flow            gateway         hello-world     log             pea             ping            pod
+--help          --version       --version-full  check           client          flow            gateway         hello             pod             ping            deployment            hub
 ```
 
 The autocomplete is context-aware. It also works when you type a second-level argument:
 
 ```bash
 
-jina pod --name --lo
+jina hub 
 
---log-profile  --log-remote   --log-sse
+--help  new     pull    push
 ```
 
 

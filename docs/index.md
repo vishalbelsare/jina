@@ -1,43 +1,49 @@
-# Welcome to Jina!
+# Welcome to Jina-serve!
+
+```{admonition} Survey
+:class: tip
+
+Take our **[user experience survey](https://10sw1tcpld4.typeform.com/to/EGAEReM7?utm_source=doc&utm_medium=github&utm_campaign=user%20experience&utm_term=feb2023&utm_content=survey)** to let us know your thoughts and help shape the future of Jina!
+```
 
 ```{include} ../README.md
-:start-after: <!-- start elevator-pitch -->
-:end-before: <!-- end elevator-pitch -->
+:start-after: <!-- start jina-description -->
+:end-before: <!-- end jina-description -->
 ```
 
 ## Install
 
-1. Make sure that you have Python 3.7+ installed on Linux/MacOS/{ref}`Windows <jina-on-windows>`.
+Make sure that you have Python 3.7+ installed on Linux/macOS/{ref}`Windows <jina-on-windows>`.
 
-    ````{tab} via PyPI
-    ```shell
-    pip install -U jina
-    ```
-    ````
-    ````{tab} via Conda
-    ```shell
-    conda install jina -c conda-forge
-    ```
-    ````
-    ````{tab} via Docker
-    ```shell
-    docker pull jinaai/jina:latest
-    ```
-    ````
+````{tab} via PyPI
+```shell
+pip install -U jina
+```
+````
+````{tab} via Conda
+```shell
+conda install jina -c conda-forge
+```
+````
+(build-ai-services)=
+(build-a-pipeline)=
+## Getting Started
+Jina-serve supports developers in building AI services and pipelines:
 
-2. That’s it! Try a hello-world demo
-   ````{tab} Run natively
-   ```shell
-   jina hello fashion
-   ```
-   ````
-   ````{tab} Run in Docker
-   ```shell
-   docker run -v "$(pwd)/j:/j" jinaai/jina:latest hello fashion --workdir /j && open j/demo.html
-   ```
-   ````
+````{tab} Build AI Services
+```{include} ../README.md
+:start-after: <!-- start build-ai-services -->
+:end-before: <!-- end build-ai-services -->
+```
+````
 
-Now that you’re set up, let’s dive into more of how Jina works and how to build great apps.
+````{tab} Build Pipelines
+```{include} ../README.md
+:start-after: <!-- start build-pipelines -->
+:end-before: <!-- end build-pipelines -->
+```
+````
+
 
 ## Next steps
 
@@ -45,55 +51,59 @@ Now that you’re set up, let’s dive into more of how Jina works and how to bu
 :gutter: 3
 
 
-::::{grid-item-card} {octicon}`smiley;1.5em` Play 3 Hello World
-:link: get-started/hello-world/index
+::::{grid-item-card} {octicon}`cross-reference;1.5em` Learn DocArray API
+:link: https://docarray.docs.org
+
+DocArray is the foundational data structure of Jina. Before starting Jina, first learn DocArray to quickly build a PoC. 
+::::
+
+::::{grid-item-card} {octicon}`gear;1.5em` Learn Executor
+:link: concepts/serving/executor/index
 :link-type: doc
 
-Try Jina on fashion image search, QA chatbot and multimodal search.
+{term}`Executor` is a Python class that can serve logic using `Documents`.
 
 ::::
 
-::::{grid-item-card} {octicon}`book;1.5em` Understand Basics
-:link: fundamentals/concepts
+::::{grid-item-card} {octicon}`workflow;1.5em` Learn Deployment
+:link: concepts/orchestration/deployment
 :link-type: doc
 
-Document, Executor, and Flow are the three fundamental concepts in Jina.
+{term}`Deployment` serves an Executor as a scalable service making it available to receive `Documents` using `gRPC` or `HTTP`.
+::::
+
+::::{grid-item-card} {octicon}`workflow;1.5em` Learn Flow
+:link: concepts/orchestration/flow
+:link-type: doc
+
+{term}`Flow` orchestrates Executors using different Deployments into a processing pipeline to accomplish a task.
+::::
+
+::::{grid-item-card} {octicon}`cross-reference;1.5em` Learn Gateway
+:link: concepts/serving/gateway/index
+
+The Gateway is a microservice that serves as the entrypoint of a {term}`Flow`. It exposes multiple protocols for external communications and routes all internal traffic.
+::::
+
+::::{grid-item-card} {octicon}`package-dependents;1.5em` Explore Executor Hub
+:link: concepts/executor/hub/index
+:link-type: doc
+:class-card: color-gradient-card-1
+
+
+Executor Hub allows you to containerize, share, explore and make Executors ready for the cloud.
 
 ::::
 
-::::{grid-item-card} {octicon}`infinity;1.5em` Tasks on Multi Data Types
-:link: datatype/text/index
-:link-type: doc
-:class-card: color-gradient-card
 
-Learn to use Jina to build neural search solution for different types of data.
+::::{grid-item-card} {octicon}`cpu;1.5em` Deploy a Flow to Cloud
+:link: concepts/jcloud/index
+:link-type: doc
+:class-card: color-gradient-card-2
+
+Jina AI Cloud is the MLOps platform for hosting Jina-serve projects.
 ::::
 
-::::{grid-item-card} {octicon}`package-dependents;1.5em` Share Executors
-:link: advanced/hub/index
-:link-type: doc
-
-Learn to share and reuse Executors from the Jina community.
-
-::::
-
-
-::::{grid-item-card} {octicon}`workflow;1.5em`  Manage Remote Jina 
-:link: advanced/daemon/index
-:link-type: doc
-
-Learn to deploy and manage Jina on remote via a RESTful interface.
-::::
-
-
-
-
-::::{grid-item-card} {octicon}`beaker;1.5em` Try Experimental Features
-:link: advanced/experimental/index
-:link-type: doc
-
-Preview the next big things we are building. Careful not to get zapped!
-::::
 
 
 :::::
@@ -103,60 +113,69 @@ Preview the next big things we are building. Careful not to get zapped!
 :end-before: <!-- end support-pitch -->
 ```
 
+
 ```{toctree}
-:caption: Get started
+:caption: Get Started
 :hidden:
 
-get-started/neural-search
 get-started/install/index
-get-started/hello-world/index
+get-started/create-app
 ```
 
+
+
 ```{toctree}
-:caption: Fundamentals
+:caption: Concepts
 :hidden:
 
-fundamentals/concepts
-fundamentals/document/index
-fundamentals/executor/index
-fundamentals/flow/index
-fundamentals/clean-code
+concepts/preliminaries/index
+concepts/serving/index
+concepts/orchestration/index
+concepts/client/index
 ```
 
-
 ```{toctree}
-:caption: Data Types
+:caption: Cloud Native
 :hidden:
 
-datatype/text/index
-datatype/image/index
-datatype/video/index
-datatype/audio/index
-datatype/mesh/index
-datatype/tabular/index
+cloud-nativeness/k8s
+cloud-nativeness/docker-compose
+cloud-nativeness/opentelemetry
+jina-ai-cloud/index
 ```
 
 ```{toctree}
-:caption: Advanced
-:hidden:
-
-advanced/hub/index
-advanced/daemon/index
-advanced/experimental/index
-```
-
-
-```{toctree}
-:caption: API Reference
+:caption: Developer Reference
 :hidden:
 :maxdepth: 1
 
-api/jina
+api-rst
 cli/index
-proto/index
+yaml-spec
+envs/index
+telemetry
+proto/docs
+docarray-support
+```
+
+```{toctree}
+:caption: Tutorials
+:hidden:
+
+tutorials/deploy-model
+tutorials/gpu-executor
+tutorials/deploy-pipeline
+tutorials/llm-serve
+```
+
+```{toctree}
+:caption: Legacy Support
+:hidden:
+:maxdepth: 1
+
+Jina 2 Documentation <https://docs2.jina.ai/>
 ```
 
 
 ---
 {ref}`genindex` | {ref}`modindex`
-

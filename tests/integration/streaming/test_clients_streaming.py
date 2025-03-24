@@ -1,12 +1,14 @@
+import asyncio
 import os
-import time, asyncio
-from typing import List
+import time
 from datetime import datetime
 from functools import partial
 from multiprocessing import Process, current_process
+from typing import List
 
 import pytest
-from jina import Flow, Document, DocumentArray, Executor, requests, Client
+
+from jina import Client, Document, DocumentArray, Executor, Flow, requests
 
 INPUT_LEN = 4
 INPUT_GEN_SLEEP_TIME = 1
@@ -79,17 +81,17 @@ class SlowExecutor(Executor):
 
 
 def on_done(response, final_da: DocumentArray):
-    print(f' receiving response {response._pb_body.request_id}')
-    for doc in response.docs:
+    print(f' receiving response {response._pb_body.header.request_id}')
+    docs = response.docs
+    for doc in docs:
         doc.tags['on_done'] = time.time()
         print(
             f'in on_done {doc.id}, time: {readable_time_from(doc.tags["on_done"])}, {doc.tags["on_done"]}',
             flush=True,
         )
-    final_da.extend(response.docs)
+    final_da.extend(docs)
 
 
-@pytest.mark.parametrize('grpc_data_requests', [False, True])
 @pytest.mark.parametrize(
     'protocol, inputs',
     [
@@ -107,22 +109,22 @@ def on_done(response, final_da: DocumentArray):
         ('http', slow_blocking_gen),
     ],
 )
-def test_disable_prefetch_slow_client_fast_executor(
-    grpc_data_requests, protocol, inputs
-):
+@pytest.mark.parametrize('use_stream', [False, True])
+def test_disable_prefetch_slow_client_fast_executor(protocol, inputs, use_stream):
+    if use_stream and protocol != 'grpc':
+        return
     print(
         f'\n\nRunning disable prefetch, slow client, fast Executor test for \n'
-        f'protocol: {protocol}, input: {inputs.__name__}, grpc_data_req: {grpc_data_requests}'
+        f'protocol: {protocol}, input: {inputs.__name__}'
     )
     final_da = DocumentArray()
-    with Flow(protocol=protocol, grpc_data_requests=grpc_data_requests).add(
-        uses=FastExecutor
-    ) as f:
+    with Flow(protocol=protocol, prefetch=0).add(uses=FastExecutor) as f:
         f.post(
             on='/',
             inputs=inputs,
             request_size=1,
             on_done=lambda response: on_done(response, final_da),
+            stream=use_stream,
         )
 
     assert len(final_da) == INPUT_LEN
@@ -140,7 +142,6 @@ def test_disable_prefetch_slow_client_fast_executor(
     assert final_da['id-3'].tags['executor'] < final_da['id-3'].tags['on_done']
 
 
-@pytest.mark.parametrize('grpc_data_requests', [True, False])
 @pytest.mark.parametrize(
     'protocol, inputs',
     [
@@ -152,22 +153,22 @@ def test_disable_prefetch_slow_client_fast_executor(
         ('http', blocking_gen),
     ],
 )
-def test_disable_prefetch_fast_client_slow_executor(
-    grpc_data_requests, protocol, inputs
-):
+@pytest.mark.parametrize('use_stream', [False, True])
+def test_disable_prefetch_fast_client_slow_executor(protocol, inputs, use_stream):
+    if use_stream and protocol != 'grpc':
+        return
     print(
         f'\n\nRunning disable prefetch, fast client, slow Executor test for \n'
-        f'protocol: {protocol}, input: {inputs.__name__}, grpc_data_req: {grpc_data_requests}'
+        f'protocol: {protocol}, input: {inputs.__name__}'
     )
     final_da = DocumentArray()
-    with Flow(protocol=protocol, grpc_data_requests=grpc_data_requests).add(
-        uses=SlowExecutor
-    ) as f:
+    with Flow(protocol=protocol).add(uses=SlowExecutor) as f:
         f.post(
             on='/',
             inputs=inputs,
             request_size=1,
             on_done=lambda response: on_done(response, final_da),
+            stream=use_stream,
         )
 
     assert len(final_da) == INPUT_LEN
@@ -203,14 +204,23 @@ class Indexer(Executor):
     @requests(on='/status')
     def status(self, **kwargs):
         # returns ids of all docs in tags
-        return DocumentArray(Document(tags={'ids': self.docs.get_attributes('id')}))
+        return DocumentArray(Document(tags={'ids': self.docs[:, 'id']}))
+
+
+@pytest.fixture()
+def info_log_level():
+    log_level = os.environ['JINA_LOG_LEVEL']
+    os.environ['JINA_LOG_LEVEL'] = 'INFO'
+    yield
+    os.environ['JINA_LOG_LEVEL'] = log_level
 
 
 @pytest.mark.parametrize('prefetch', [0, 5])
 @pytest.mark.parametrize('protocol', ['websocket', 'http', 'grpc'])
-@pytest.mark.parametrize('grpc_data_requests', [False, True])
-def test_multiple_clients(prefetch, protocol, grpc_data_requests):
-    os.environ['JINA_LOG_LEVEL'] = 'INFO'
+@pytest.mark.parametrize('use_stream', [False, True])
+def test_multiple_clients(prefetch, protocol, info_log_level, use_stream):
+    if use_stream and protocol != 'grpc':
+        return
     GOOD_CLIENTS = 5
     GOOD_CLIENT_NUM_DOCS = 20
     MALICIOUS_CLIENT_NUM_DOCS = 50
@@ -218,7 +228,7 @@ def test_multiple_clients(prefetch, protocol, grpc_data_requests):
     def get_document(i):
         return Document(
             id=f'{current_process().name}_{i}',
-            buffer=bytes(bytearray(os.urandom(512 * 4))),
+            text=str(bytes(bytearray(os.urandom(512 * 4)))),
         )
 
     async def good_client_gen():
@@ -230,21 +240,23 @@ def test_multiple_clients(prefetch, protocol, grpc_data_requests):
         for i in range(1000, 1000 + MALICIOUS_CLIENT_NUM_DOCS):
             yield get_document(i)
 
-    def client(gen, port, protocol):
-        Client(protocol=protocol, port=port).post(
-            on='/index', inputs=gen, request_size=1
+    def client(gen, port):
+        Client(protocol=protocol, port=port, prefetch=prefetch).post(
+            on='/index',
+            inputs=gen,
+            request_size=1,
+            return_responses=True,
+            stream=use_stream,
         )
 
     pool: List[Process] = []
-    f = Flow(
-        protocol=protocol, prefetch=prefetch, grpc_data_requests=grpc_data_requests
-    ).add(uses=Indexer)
+    f = Flow(protocol=protocol, prefetch=prefetch).add(uses=Indexer)
     with f:
         # We have 5 good clients connecting to the same gateway. They have controlled requests.
         # Each client sends `GOOD_CLIENT_NUM_DOCS` (20) requests and sleeps after each request.
         for i in range(GOOD_CLIENTS):
             p = Process(
-                target=partial(client, good_client_gen, f.port_expose, protocol),
+                target=partial(client, good_client_gen, f.port),
                 name=f'goodguy_{i}',
             )
             p.start()
@@ -252,7 +264,7 @@ def test_multiple_clients(prefetch, protocol, grpc_data_requests):
 
         # and 1 malicious client, sending lot of requests (trying to block others)
         p = Process(
-            target=partial(client, malicious_client_gen, f.port_expose, protocol),
+            target=partial(client, malicious_client_gen, f.port),
             name='badguy',
         )
         p.start()
@@ -262,35 +274,35 @@ def test_multiple_clients(prefetch, protocol, grpc_data_requests):
             p.join()
 
         order_of_ids = list(
-            Client(protocol=protocol, port=f.port_expose)
-            .post(on='/status', inputs=[Document()], return_results=True)[0]
+            Client(protocol=protocol, port=f.port, prefetch=prefetch)
+            .post(
+                on='/status',
+                inputs=[Document()],
+                return_responses=True,
+                stream=use_stream,
+            )[0]
             .docs[0]
             .tags['ids']
         )
-        # There must be total 150 docs indexed.
-        assert (
-            len(order_of_ids)
-            == GOOD_CLIENTS * GOOD_CLIENT_NUM_DOCS + MALICIOUS_CLIENT_NUM_DOCS
-        )
+    # There must be total 150 docs indexed.
+    assert (
+        len(order_of_ids)
+        == GOOD_CLIENTS * GOOD_CLIENT_NUM_DOCS + MALICIOUS_CLIENT_NUM_DOCS
+    )
 
-        """
-        If prefetch is set, each Client is allowed (max) 5 requests at a time.
-        Since requests are controlled, `badguy` has to do the last 20 requests.
-        
-        If prefetch is disabled, clients can freeflow requests. No client is blocked. 
-        Hence last 20 requests go from `goodguy`.
-        (Ideally last 30 requests should be validated, to avoid flaky CI, we test last 20)
+    """
+    If prefetch is set, each Client is allowed (max) 5 requests at a time.
+    Since requests are controlled, `badguy` has to do the last 20 requests.
+    
+    If prefetch is disabled, clients can freeflow requests. No client is blocked. 
+    Hence last 20 requests go from `goodguy`.
+    (Ideally last 30 requests should be validated, to avoid flaky CI, we test last 20)
 
-        When there are no rules, badguy wins! With rule, you find balance in the world.        
-        """
-        if protocol == 'http':
-            # There's no prefetch for http.
-            assert set(map(lambda x: x.split('_')[0], order_of_ids[-20:])) == {
-                'goodguy'
-            }
-        elif prefetch == 5:
-            assert set(map(lambda x: x.split('_')[0], order_of_ids[-20:])) == {'badguy'}
-        elif prefetch == 0:
-            assert set(map(lambda x: x.split('_')[0], order_of_ids[-20:])) == {
-                'goodguy'
-            }
+    When there are no rules, badguy wins! With rule, you find balance in the world.        
+    """
+    if (
+        prefetch == 5 and use_stream
+    ):  # if stream is False the prefetch is controleed by each client and then it applies per client
+        assert set(map(lambda x: x.split('_')[0], order_of_ids[-20:])) == {'badguy'}
+    elif prefetch == 0:
+        assert set(map(lambda x: x.split('_')[0], order_of_ids[-20:])) == {'goodguy'}

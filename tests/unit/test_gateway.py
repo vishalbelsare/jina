@@ -5,26 +5,14 @@ from threading import Thread
 import numpy as np
 import pytest
 
-from jina import Document, Client, Flow
-from jina.enums import CompressAlgo
-from tests import random_docs
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize('compress_algo', list(CompressAlgo))
-def test_compression(compress_algo):
-    f = Flow(compress=str(compress_algo)).add().add(name='DummyEncoder', shards=2).add()
-
-    with f:
-        results = f.index(random_docs(10), return_results=True)
-
-    assert len(results) > 0
+from jina import Client, Document, Flow
+from jina.helper import random_port
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize('protocol', ['websocket', 'http'])
 def test_gateway_concurrency(protocol, reraise):
-    PORT_EXPOSE = 12345
+    port = random_port()
     CONCURRENCY = 2
 
     def _validate(req, start, status_codes, durations, index):
@@ -42,16 +30,14 @@ def test_gateway_concurrency(protocol, reraise):
                 durations=durations,
                 index=index,
             )
-            results = Client(port=PORT_EXPOSE, protocol=protocol).index(
-                inputs=(Document() for _ in range(256)),
-                return_results=True,
-                _size=16,
+            results = Client(port=port, protocol=protocol).index(
+                inputs=(Document() for _ in range(256)), _size=16, return_responses=True
             )
             assert len(results) > 0
             for result in results:
                 on_done(result)
 
-    f = Flow(protocol=protocol, port_expose=PORT_EXPOSE).add(parallel=2)
+    f = Flow(protocol=protocol, port=port).add(replicas=2)
     with f:
         threads = []
         status_codes = [None] * CONCURRENCY
@@ -78,3 +64,10 @@ def test_gateway_concurrency(protocol, reraise):
     # requests.
     rate = failed / success
     assert rate < 0.1
+
+
+def test_grpc_custom_options():
+
+    f = Flow(grpc_server_options={'grpc.max_send_message_length': -1})
+    with f:
+        pass

@@ -1,14 +1,13 @@
 """Helper functions for clients in Jina."""
 
 from functools import wraps
-from typing import Callable
+from typing import Callable, Optional
 
-from ..excepts import BadClientCallback
-from ..helper import colored
-from ..importer import ImportExtensions
-from ..logging.logger import JinaLogger
-from ..proto import jina_pb2
-from ..types.request import Response
+from jina.excepts import BadClientCallback, BadServer
+from jina.helper import get_rich_console
+from jina.logging.logger import JinaLogger
+from jina.proto import jina_pb2
+from jina.types.request.data import Response
 
 
 def pprint_routes(resp: 'Response', stack_limit: int = 3):
@@ -19,29 +18,25 @@ def pprint_routes(resp: 'Response', stack_limit: int = 3):
     """
     routes = resp.routes
 
-    from rich.table import Table
     from rich import box
+    from rich.table import Table
 
     table = Table(box=box.SIMPLE)
-    for v in ('Pod', 'Time', 'Exception'):
+    for v in ('Executor', 'Time', 'Exception'):
         table.add_column(v)
 
     for route in routes:
         status_icon = '🟢'
         if route.status.code == jina_pb2.StatusProto.ERROR:
             status_icon = '🔴'
-        elif route.status.code == jina_pb2.StatusProto.ERROR_CHAINED:
-            status_icon = '⚪'
 
         table.add_row(
-            f'{status_icon} {route.pod}',
+            f'{status_icon} {route.executor}',
             f'{route.start_time.ToMilliseconds() - routes[0].start_time.ToMilliseconds()}ms',
             ''.join(route.status.exception.stacks[-stack_limit:]),
         )
 
-    from rich.console import Console
-
-    console = Console()
+    console = get_rich_console()
     console.print(table)
 
 
@@ -62,11 +57,11 @@ def _safe_callback(func: Callable, continue_on_error: bool, logger) -> Callable:
 
 def callback_exec(
     response,
-    on_done: Callable,
-    on_error: Callable,
-    on_always: Callable,
-    continue_on_error: bool,
     logger: JinaLogger,
+    on_done: Optional[Callable] = None,
+    on_error: Optional[Callable] = None,
+    on_always: Optional[Callable] = None,
+    continue_on_error: bool = False,
 ) -> None:
     """Execute the callback with the response.
 
@@ -77,9 +72,14 @@ def callback_exec(
     :param continue_on_error: whether to continue on error
     :param logger: a logger instance
     """
-    if on_error and response.status.code >= jina_pb2.StatusProto.ERROR:
-        _safe_callback(on_error, continue_on_error, logger)(response)
-    elif on_done and response.status.code == jina_pb2.StatusProto.SUCCESS:
+    if response.header.status.code >= jina_pb2.StatusProto.ERROR:
+        if on_error:
+            _safe_callback(on_error, continue_on_error, logger)(response)
+        elif continue_on_error:
+            logger.error(f'Server error: {response.header}')
+        else:
+            raise BadServer(response.header)
+    elif on_done and response.header.status.code == jina_pb2.StatusProto.SUCCESS:
         _safe_callback(on_done, continue_on_error, logger)(response)
     if on_always:
         _safe_callback(on_always, continue_on_error, logger)(response)

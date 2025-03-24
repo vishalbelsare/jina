@@ -4,6 +4,8 @@
 ```{toctree}
 :hidden:
 
-../../advanced/experimental/windows
+docker
+apple-silicon-m1-m2
+windows
 troubleshooting
 ```

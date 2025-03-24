@@ -2,7 +2,8 @@ import os
 
 import pytest
 
-from jina import Executor, requests, Flow, Document
+from jina import Client, Document, Executor, Flow, requests
+from jina.helper import random_port
 
 
 class MyExec(Executor):
@@ -63,9 +64,11 @@ def test_load_save_yml(tmp_path):
     ],
 )
 def test_load_yaml_route(req_endpoint, doc_text):
-    f = Flow().add(uses=y)
+    port = random_port()
+    f = Flow(port=port).add(uses=y)
+    c = Client(port=f.port)
 
     with f:
-        results = f.post(req_endpoint, Document(), return_results=True)
+        results = c.post(req_endpoint, Document(), return_responses=True)
 
     assert results[0].docs[0].text == doc_text

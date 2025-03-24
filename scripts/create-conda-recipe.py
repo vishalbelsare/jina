@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 def get_extra_requires(path):
     try:
-        with open(path) as fp:
+        with open(path, encoding='utf-8') as fp:
             extra_deps = defaultdict(set)
             for k in fp:
                 if k.strip() and not k.startswith('#'):
@@ -71,10 +71,15 @@ class RecipeDumper(yaml.SafeDumper):
 # Get requirements from the extra-requirements.txt file
 #######################################################
 
+NON_EXISTING_CONDA_PACKAGES = [
+    'jcloud',
+    'opentelemetry-exporter-otlp-proto-grpc',
+    'opentelemetry-exporter-prometheus',
+]
 extra_deps = get_extra_requires('extra-requirements.txt')
 reqs = {}
 
-# core < perf < standard < daemon
+# core < perf < standard
 # standard < demo
 reqs['core'] = extra_deps['core']
 reqs['perf'] = reqs['core'].union(extra_deps['perf'])
@@ -82,6 +87,17 @@ reqs['standard'] = reqs['perf'].union(extra_deps['standard'])
 
 for key in list(reqs.keys()):
     reqs[key] = sorted(list(reqs[key]))
+    ids_to_remove = []
+    for i, v in enumerate(reqs[key]):
+        remove = False
+        for non_existing in NON_EXISTING_CONDA_PACKAGES:
+            if non_existing in v:
+                remove = True
+        if remove:
+            ids_to_remove.append(i)
+
+    for _i in reversed(ids_to_remove):
+        del reqs[key][_i]
 
 
 ######################################
@@ -112,7 +128,7 @@ test_object = {
 }
 build_object_core = {
     'noarch': 'python',
-    'entry_points': ['jina = cli:main', 'jinad = daemon:main'],
+    'entry_points': ['jina = cli:main'],
     'script': 'python -m pip install . --no-deps -vv',
     'script_env': ['JINA_PIP_INSTALL_CORE=1'],
 }
@@ -166,11 +182,11 @@ recipe_object = {
         'license': 'Apache-2.0',
         'license_family': 'Apache',
         'license_file': 'LICENSE',
-        'summary': 'Jina is the cloud-native neural search framework for any kind of data',
-        'doc_url': 'https://docs.jina.ai',
+        'summary': 'Build multimodal AI services via cloud native technologies · Neural Search · Generative AI · Cloud Native',
+        'doc_url': 'https://jina.ai/serve',
     },
     'extra': {
-        'recipe-maintainers': ['tadejsv', 'maateen', 'nan-wang', 'hanxiao'],
+        'recipe-maintainers': ['JoanFM', 'nan-wang', 'hanxiao'],
         'feedstock-name': 'jina',
     },
 }
@@ -195,5 +211,5 @@ recipe_header = f'''{{% set name = "jina" %}}
 '''
 
 recipe = recipe_header + recipe
-with open('conda/meta.yaml', 'w+') as fp:
+with open('conda/meta.yaml', 'w+', encoding='utf-8') as fp:
     fp.write(recipe)

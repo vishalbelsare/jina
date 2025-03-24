@@ -21,7 +21,7 @@ jobs:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
       - id: docs_updated
         if: contains( github.event.pull_request.labels.*.name, 'area/docs')
-        run: echo '::set-output name=docs::true'
+        run: echo "docs=true" >> $GITHUB_OUTPUT
     outputs:
       docs: ${{ steps.docs_updated.outputs.docs }}
 
@@ -32,25 +32,26 @@ jobs:
     steps:
       - run: |
           echo "BRANCH_NAME=${{ github.head_ref }}" >> $GITHUB_ENV
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v2.5.0
         with:
           repository: jina-ai/jina
           ref: ${{ env.BRANCH_NAME }}
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: 3.7
       - uses: actions/setup-node@v2
         with:
           node-version: '14'
       - name: Build and Deploy
+        timeout-minutes: 30
         run: |
           npm i -g netlify-cli
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           git fetch origin
           export NUM_RELEASES=2 # only 2 last tags to save build time 
-          bash makedoc.sh development
-          netlify deploy --dir=_build/dirhtml --alias=${{ env.BRANCH_NAME }} --message="Deploying docs to ${{ env.BRANCH_NAME }} branch"
+          bash makedoc.sh local-only
+          netlify deploy --dir=./_build/dirhtml --alias=${{ env.BRANCH_NAME }} --message="Deploying docs to ${{ env.BRANCH_NAME }} branch"
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}

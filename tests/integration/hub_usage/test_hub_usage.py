@@ -1,18 +1,17 @@
 import os
-import json
 from pathlib import Path
-import requests
+
 import pytest
 
 from jina import Flow
 from jina.excepts import RuntimeFailToStart
-from jina.executors import BaseExecutor
-from jina.parsers import set_pod_parser
-from jina.peapods import Pod
+from jina.orchestrate.deployments import Deployment
+from jina.parsers import set_deployment_parser
+from jina.serve.executors import BaseExecutor
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 
-
+@pytest.mark.skip('jinahub not available')
 def test_simple_use_abs_import_shall_fail():
     with pytest.raises(ModuleNotFoundError):
         from .dummyhub_abs import DummyHubExecutorAbs
@@ -23,7 +22,7 @@ def test_simple_use_abs_import_shall_fail():
         with Flow().add(uses='DummyHubExecutorAbs'):
             pass
 
-
+@pytest.mark.skip('jinahub not available')
 def test_simple_use_relative_import():
     from .dummyhub import DummyHubExecutor
 
@@ -32,28 +31,26 @@ def test_simple_use_relative_import():
     with Flow().add(uses='DummyHubExecutor'):
         pass
 
-
+@pytest.mark.skip('jinahub not available')
 def test_use_from_local_dir_exe_level():
     with BaseExecutor.load_config('dummyhub/config.yml'):
         pass
 
-
-def test_use_from_local_dir_pod_level():
-    a = set_pod_parser().parse_args(['--uses', 'dummyhub/config.yml'])
-    with Pod(a):
+@pytest.mark.skip('jinahub not available')
+def test_use_from_local_dir_deployment_level():
+    a = set_deployment_parser().parse_args(['--uses', 'dummyhub/config.yml'])
+    with Deployment(a):
         pass
 
-
+@pytest.mark.skip('jinahub not available')
 def test_use_from_local_dir_flow_level():
     with Flow().add(uses='dummyhub/config.yml'):
         pass
 
 
 @pytest.fixture
-def local_hub_executor(tmpdir, test_envs):
-    from jina.hubble import hubapi, helper, HubExecutor
-
-    hubapi._hub_root = Path(os.environ.get('JINA_HUB_ROOT'))
+def local_hub_executor(tmpdir):
+    from hubble.executor import HubExecutor, helper, hubapi
 
     pkg_path = Path(__file__).parent / 'dummyhub'
     stream_data = helper.archive_package(pkg_path)
@@ -64,52 +61,66 @@ def local_hub_executor(tmpdir, test_envs):
         Path(tmpdir) / 'dummy_test.zip', HubExecutor(uuid='hello', tag='v0')
     )
 
-
-def test_use_from_local_hub_pod_level(
-    test_envs, mocker, monkeypatch, local_hub_executor
+@pytest.mark.skip('jinahub not available')
+@pytest.mark.parametrize('uses', ['jinahub://hello', 'jinaai://jina-ai/hello'])
+def test_use_from_local_hub_deployment_level(
+    mocker, monkeypatch, local_hub_executor, uses
 ):
-    from jina.hubble.hubio import HubIO, HubExecutor
+    from hubble.executor.hubio import HubExecutor, HubIO
 
     mock = mocker.Mock()
 
-    def _mock_fetch(name, tag=None, secret=None, force=False):
+    def _mock_fetch(
+        name,
+        *args,
+        **kwargs,
+    ):
         mock(name=name)
-        return HubExecutor(
-            uuid='hello',
-            name='alias_dummy',
-            tag='v0',
-            image_name='jinahub/pod.dummy_mwu_encoder',
-            md5sum=None,
-            visibility=True,
-            archive_url=None,
+        return (
+            HubExecutor(
+                uuid='hello',
+                name='alias_dummy',
+                tag='v0',
+                image_name='jinahub/pod.dummy_mwu_encoder',
+                md5sum=None,
+                visibility=True,
+                archive_url=None,
+            ),
+            False,
         )
 
     monkeypatch.setattr(HubIO, 'fetch_meta', _mock_fetch)
-    a = set_pod_parser().parse_args(['--uses', 'jinahub://hello'])
-    with Pod(a):
+    a = set_deployment_parser().parse_args(['--uses', uses])
+    with Deployment(a):
         pass
 
-
-def test_use_from_local_hub_flow_level(
-    test_envs, mocker, monkeypatch, local_hub_executor
-):
-    from jina.hubble.hubio import HubIO, HubExecutor
+@pytest.mark.skip('jinahub not available')
+@pytest.mark.parametrize('uses', ['jinahub://hello', 'jinaai://jina-ai/hello'])
+def test_use_from_local_hub_flow_level(mocker, monkeypatch, local_hub_executor, uses):
+    from hubble.executor.hubio import HubExecutor, HubIO
 
     mock = mocker.Mock()
 
-    def _mock_fetch(name, tag=None, secret=None, force=False):
+    def _mock_fetch(
+        name,
+        *args,
+        **kwargs,
+    ):
         mock(name=name)
-        return HubExecutor(
-            uuid='hello',
-            name='alias_dummy',
-            tag='v0',
-            image_name='jinahub/pod.dummy_mwu_encoder',
-            md5sum=None,
-            visibility=True,
-            archive_url=None,
+        return (
+            HubExecutor(
+                uuid='hello',
+                name='alias_dummy',
+                tag='v0',
+                image_name='jinahub/pod.dummy_mwu_encoder',
+                md5sum=None,
+                visibility=True,
+                archive_url=None,
+            ),
+            False,
         )
 
     monkeypatch.setattr(HubIO, 'fetch_meta', _mock_fetch)
 
-    with Flow().add(uses='jinahub://hello', install_requirements=True):
+    with Flow().add(uses=uses, install_requirements=True):
         pass
